@@ -1,5 +1,6 @@
 from pathlib import Path
 from html import escape
+import os
 import sys
 from tempfile import NamedTemporaryFile
 
@@ -350,20 +351,42 @@ with overview_right:
         unsafe_allow_html=True,
     )
 
+
+def get_rtc_configuration():
+    turn_url = os.getenv("TURN_SERVER_URL")
+    turn_username = os.getenv("TURN_USERNAME")
+    turn_password = os.getenv("TURN_PASSWORD")
+
+    if turn_url and turn_username and turn_password:
+        return RTCConfiguration(
+            {
+                "iceServers": [
+                    {
+                        "urls": [turn_url],
+                        "username": turn_username,
+                        "credential": turn_password,
+                    }
+                ]
+            }
+        )
+
+    return RTCConfiguration({"iceServers": []})
+
+
 camera_tab, image_tab, video_tab = st.tabs(["Camera", "Image", "Video"])
 
 with camera_tab:
-    camera_mode = st.radio("Camera mode", ["Live stream", "Snapshot"], horizontal=True)
+    camera_mode = st.radio("Camera mode", ["Snapshot", "Live stream"], horizontal=True)
 
     if camera_mode == "Live stream":
-        st.markdown('<div class="small-muted">Start the stream and allow camera access in your browser.</div>', unsafe_allow_html=True)
+        st.info(
+            "Live stream works best locally. On Streamlit Cloud, use Snapshot unless you add TURN_SERVER_URL, TURN_USERNAME, and TURN_PASSWORD secrets."
+        )
         if WEBRTC_AVAILABLE:
             webrtc_streamer(
                 key=f"vision-live-{model_reference}-{confidence}-{image_size}-{max_detections}-{class_ids}",
                 video_processor_factory=DetectionVideoProcessor,
-                rtc_configuration=RTCConfiguration(
-                    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-                ),
+                rtc_configuration=get_rtc_configuration(),
                 media_stream_constraints={"video": True, "audio": False},
                 async_processing=True,
             )
@@ -371,7 +394,7 @@ with camera_tab:
             st.warning("Live streaming needs streamlit-webrtc. Run `pip install -r requirements.txt`, then restart Streamlit.")
 
     else:
-        st.markdown('<div class="small-muted">Use the browser camera for a quick detection snapshot.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="small-muted">Use the browser camera for a quick detection snapshot. This is the most reliable camera mode on Streamlit Cloud.</div>', unsafe_allow_html=True)
         camera_image = st.camera_input("Camera")
         if camera_image:
             image = Image.open(camera_image)
